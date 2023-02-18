@@ -114,12 +114,10 @@ impl State {
 }
 
 fn data_hash(data: Option<&str>) -> &str {
-    if let Some(inner) = data {
-        return inner;
-    }
-    "0"
+    data.unwrap_or("0")
 }
 
+// TODO: consider load M form map, to accommodate a non-initial state.
 fn load_map(map: HashMap<&'static str, &'static str>) -> State {
     let mut initial_state = HashMap::new();
 
