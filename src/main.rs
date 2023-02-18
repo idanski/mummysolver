@@ -11,14 +11,14 @@ const MAX_DEPTH: usize = 64;
 
 #[derive(Clone, Debug)]
 struct GraphNode {
-    location: String,       // TODO: should be &str
-    data: Option<String>,   // If none it's an empty node
-    connected: Vec<String>, // locations
+    location: &'static str,
+    data: Option<&'static str>,   // If none it's an empty node
+    connected: Vec<&'static str>, // what locations this node is connected to
 }
 
 impl GraphNode {
     fn is_placed(&self) -> bool {
-        if let Some(inner) = self.data.as_deref() {
+        if let Some(inner) = self.data {
             return inner == self.location;
         } else if self.location == LOC_M {
             return true;
@@ -29,8 +29,8 @@ impl GraphNode {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct Move {
-    from: String,
-    to: String,
+    from: &'static str,
+    to: &'static str,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -65,8 +65,8 @@ impl State {
             .connected
             .iter()
             .map(|from| Move {
-                from: from.clone(),
-                to: empty.location.clone(),
+                from,
+                to: empty.location,
             })
             .collect()
     }
@@ -74,18 +74,18 @@ impl State {
     fn move_data(&self, m: &Move) -> Result<State, &'static str> {
         let mut new_state = self.clone();
 
-        let from_node = new_state.map.get_mut(m.from.as_str()).unwrap(); // TODO: convert to err?
+        let from_node = new_state.map.get_mut(m.from).unwrap(); // TODO: convert to err?
 
-        let mut moveable: String = "".to_string();
+        let mut moveable: &'static str = "";
 
         if let Some(data) = from_node.data.as_ref() {
-            moveable = data.clone();
+            moveable = data;
             from_node.data = None;
         } else {
             Err("no data in from")?
         }
 
-        let to_node = new_state.map.get_mut(m.to.as_str()).unwrap(); // TODO: convert to err?
+        let to_node = new_state.map.get_mut(m.to).unwrap(); // TODO: convert to err?
 
         to_node.data = Some(moveable);
         new_state.moves.push(m.clone());
@@ -102,22 +102,22 @@ impl State {
     fn hash(&self) -> String {
         format!(
             "{}{}{}{}{}{}{}",
-            data_hash(self.map[LOC_1].data.as_ref()),
-            data_hash(self.map[LOC_2].data.as_ref()),
-            data_hash(self.map[LOC_3].data.as_ref()),
-            data_hash(self.map[LOC_4].data.as_ref()),
-            data_hash(self.map[LOC_5].data.as_ref()),
-            data_hash(self.map[LOC_6].data.as_ref()),
-            data_hash(self.map[LOC_M].data.as_ref())
+            data_hash(self.map[LOC_1].data),
+            data_hash(self.map[LOC_2].data),
+            data_hash(self.map[LOC_3].data),
+            data_hash(self.map[LOC_4].data),
+            data_hash(self.map[LOC_5].data),
+            data_hash(self.map[LOC_6].data),
+            data_hash(self.map[LOC_M].data)
         )
     }
 }
 
-fn data_hash(data: Option<&String>) -> String {
+fn data_hash(data: Option<&str>) -> &str {
     if let Some(inner) = data {
-        return inner.clone();
+        return inner;
     }
-    "0".to_string()
+    "0"
 }
 
 fn load_map(map: HashMap<&'static str, &'static str>) -> State {
@@ -125,19 +125,16 @@ fn load_map(map: HashMap<&'static str, &'static str>) -> State {
 
     // Create Nodes
     let middle_node = GraphNode {
-        location: LOC_M.to_string(),
+        location: LOC_M,
         data: None,
-        connected: vec![LOC_1, LOC_2, LOC_3, LOC_4, LOC_5, LOC_6]
-            .iter()
-            .map(|s| s.to_string())
-            .collect(),
+        connected: vec![LOC_1, LOC_2, LOC_3, LOC_4, LOC_5, LOC_6],
     };
     initial_state.insert(LOC_M, middle_node);
 
     for (k, v) in map.into_iter() {
         let node = GraphNode {
-            location: k.to_string(),
-            data: Some(v.to_string()),
+            location: k,
+            data: Some(v),
             connected: vec![],
         };
         initial_state.insert(k, node);
@@ -155,9 +152,9 @@ fn load_map(map: HashMap<&'static str, &'static str>) -> State {
         }
 
         node.connected.extend_from_slice(&[
-            up_neighbor.to_string(),
-            down_neighbor.to_string(),
-            LOC_M.to_string(),
+            to_predefined_str(up_neighbor).unwrap(),
+            to_predefined_str(down_neighbor).unwrap(),
+            LOC_M,
         ])
     }
 
@@ -165,6 +162,19 @@ fn load_map(map: HashMap<&'static str, &'static str>) -> State {
         map: initial_state,
         moves: vec![],
         past_states: HashSet::new(),
+    }
+}
+
+// Does this suck as much as I think it does??
+fn to_predefined_str(x: i32) -> Result<&'static str, ()> {
+    match x {
+        1 => Ok(LOC_1),
+        2 => Ok(LOC_2),
+        3 => Ok(LOC_3),
+        4 => Ok(LOC_4),
+        5 => Ok(LOC_5),
+        6 => Ok(LOC_6),
+        _ => Err(()),
     }
 }
 
