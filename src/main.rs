@@ -25,6 +25,10 @@ impl GraphNode {
         }
         false
     }
+
+    fn data_hash(&self) -> &'static str {
+        self.data.unwrap_or("0")
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -102,19 +106,15 @@ impl State {
     fn hash(&self) -> String {
         format!(
             "{}{}{}{}{}{}{}",
-            data_hash(self.map[LOC_1].data),
-            data_hash(self.map[LOC_2].data),
-            data_hash(self.map[LOC_3].data),
-            data_hash(self.map[LOC_4].data),
-            data_hash(self.map[LOC_5].data),
-            data_hash(self.map[LOC_6].data),
-            data_hash(self.map[LOC_M].data)
+            self.map[LOC_1].data_hash(),
+            self.map[LOC_2].data_hash(),
+            self.map[LOC_3].data_hash(),
+            self.map[LOC_4].data_hash(),
+            self.map[LOC_5].data_hash(),
+            self.map[LOC_6].data_hash(),
+            self.map[LOC_M].data_hash()
         )
     }
-}
-
-fn data_hash(data: Option<&str>) -> &str {
-    data.unwrap_or("0")
 }
 
 // TODO: consider load M form map, to accommodate a non-initial state.
