@@ -9,7 +9,7 @@ const LOC_6: &str = "6";
 const LOC_M: &str = "M";
 const MAX_DEPTH: usize = 10;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 struct GraphNode {
     location: String,       // TODO: should be &str
     data: Option<String>,   // If none it's an empty node
@@ -33,12 +33,72 @@ struct Move {
     to: String,
 }
 
-impl Move {
-    fn backwards_move(&self) -> Move {
-        Move {
-            from: self.to.clone(),
-            to: self.from.clone(),
+#[derive(Debug, Clone, Default)]
+struct State {
+    map: HashMap<&'static str, GraphNode>,
+    moves: Vec<Move>,
+}
+
+impl State {
+    fn is_solved(&self) -> bool {
+        self.map.values().all(|node| node.is_placed())
+    }
+
+    fn print(&self) {
+        // TODO: Draw it nicely :)
+        println!("{{");
+        self.map
+            .values()
+            .for_each(|node| println!("\t{:?}: {:?}", node.location, node.data));
+        println!("}}");
+    }
+
+    fn move_possibilities(&self) -> Vec<Move> {
+        let empty = self.map.values().find(|v| v.data.is_none()).unwrap();
+
+        empty
+            .connected
+            .iter()
+            .map(|from| Move {
+                from: from.clone(),
+                to: empty.location.clone(),
+            })
+            .collect()
+    }
+
+    fn move_data(&self, m: Move) -> Result<State, &'static str> {
+        let mut new_state = self.clone();
+
+        let from_node = new_state.map.get_mut(m.from.as_str()).unwrap(); // TODO: convert to err?
+
+        let mut moveable: String = "".to_string();
+
+        if let Some(data) = from_node.data.as_ref() {
+            moveable = data.clone();
+            from_node.data = None;
+        } else {
+            Err("no data in from")?
         }
+
+        let to_node = new_state.map.get_mut(m.to.as_str()).unwrap(); // TODO: convert to err?
+
+        to_node.data = Some(moveable);
+        new_state.moves.push(m);
+
+        Ok(new_state)
+    }
+
+    fn hash(&self) -> String {
+        format!(
+            "{}{}{}{}{}{}{}",
+            data_hash(self.map[LOC_1].data.as_ref()),
+            data_hash(self.map[LOC_2].data.as_ref()),
+            data_hash(self.map[LOC_3].data.as_ref()),
+            data_hash(self.map[LOC_4].data.as_ref()),
+            data_hash(self.map[LOC_5].data.as_ref()),
+            data_hash(self.map[LOC_6].data.as_ref()),
+            data_hash(self.map[LOC_M].data.as_ref())
+        )
     }
 }
 
@@ -49,8 +109,8 @@ fn data_hash(data: Option<&String>) -> String {
     "0".to_string()
 }
 
-fn load_map<'a>(map: HashMap<&'a str, &'a str>) -> HashMap<&'a str, GraphNode> {
-    let mut result = HashMap::new();
+fn load_map(map: HashMap<&'static str, &'static str>) -> State {
+    let mut initial_state = HashMap::new();
 
     // Create Nodes
     let middle_node = GraphNode {
@@ -61,7 +121,7 @@ fn load_map<'a>(map: HashMap<&'a str, &'a str>) -> HashMap<&'a str, GraphNode> {
             .map(|s| s.to_string())
             .collect(),
     };
-    result.insert(LOC_M, middle_node);
+    initial_state.insert(LOC_M, middle_node);
 
     for (k, v) in map.into_iter() {
         let node = GraphNode {
@@ -69,16 +129,17 @@ fn load_map<'a>(map: HashMap<&'a str, &'a str>) -> HashMap<&'a str, GraphNode> {
             data: Some(v.to_string()),
             connected: vec![],
         };
-        result.insert(k, node);
+        initial_state.insert(k, node);
     }
 
     // Connect Nodes
     for i in 1..7 {
-        let node = result.get_mut(i.to_string().as_str()).unwrap();
+        let node = initial_state.get_mut(i.to_string().as_str()).unwrap();
 
         let up_neighbor = i / 6 + (i + 1) % 7;
         let mut down_neighbor = (i - 1) % 6;
         if down_neighbor == 0 {
+            // This could have been math but I'm too tired to figure it out
             down_neighbor = 6;
         }
 
@@ -89,162 +150,63 @@ fn load_map<'a>(map: HashMap<&'a str, &'a str>) -> HashMap<&'a str, GraphNode> {
         ])
     }
 
-    result
-}
-
-fn is_solved(state: &HashMap<&str, GraphNode>) -> bool {
-    state.values().all(|node| node.is_placed())
-}
-
-fn state_hash(state: &HashMap<&str, GraphNode>) -> String {
-    format!(
-        "{}{}{}{}{}{}{}",
-        data_hash(state[LOC_1].data.as_ref()),
-        data_hash(state[LOC_2].data.as_ref()),
-        data_hash(state[LOC_3].data.as_ref()),
-        data_hash(state[LOC_4].data.as_ref()),
-        data_hash(state[LOC_5].data.as_ref()),
-        data_hash(state[LOC_6].data.as_ref()),
-        data_hash(state[LOC_M].data.as_ref())
-    )
-}
-
-fn move_data(
-    state: &HashMap<&'static str, GraphNode>,
-    m: Move,
-) -> Result<HashMap<&'static str, GraphNode>, &'static str> {
-    let mut new_state = (*state).clone();
-
-    let from_node = new_state.get_mut(m.from.as_str()).unwrap();
-
-    let mut moveable: String = "".to_string();
-
-    if let Some(data) = from_node.data.as_ref() {
-        moveable = data.clone();
-        from_node.data = None;
-    } else {
-        Err("no data in from")?
+    State {
+        map: initial_state,
+        moves: vec![],
     }
-
-    let to_node = new_state.get_mut(m.to.as_str()).unwrap();
-
-    to_node.data = Some(moveable);
-
-    Ok(new_state)
 }
 
-fn move_possibilities(
-    state: &HashMap<&'static str, GraphNode>,
-    last_move: Option<Move>,
-) -> Vec<Move> {
-    let empty = state.values().find(|v| v.data.is_none()).unwrap();
-
-    let forbidden_move = last_move.map(|m| m.backwards_move());
-
-    empty
-        .connected
-        .iter()
-        .map(|from| Move {
-            from: from.clone(),
-            to: empty.location.clone(),
-        })
-        .filter(|m| Some(m) != forbidden_move.as_ref())
-        .collect()
-}
-
-fn print_state(state: &HashMap<&str, GraphNode>) {
-    // TODO: Draw it nicely :)
-    println!("{{");
-    state
-        .values()
-        .for_each(|node| println!("\t{:?}: {:?}", node.location, node.data));
-    println!("}}");
-}
-
-fn solve(
-    state: &HashMap<&'static str, GraphNode>,
-    moves: Vec<Move>,
-    past_states: HashSet<String>,
-) -> Result<(HashMap<&'static str, GraphNode>, Vec<Move>), String> {
+fn solve(state: &State, past_states: HashSet<String>) -> Result<State, String> {
     // println!("solve depth: {}, moves: {:?}", moves.len(), moves);
     // print_state(state);
     // println!("{:?}", past_states);
     // println!("---------");
 
-    if is_solved(state) {
-        println!("found a solution in {} moves!", moves.len());
-        return Ok((state.clone(), moves));
+    if state.is_solved() {
+        println!("found a solution in {} moves!", state.moves.len());
+        return Ok(state.clone());
     }
 
-    if moves.len() >= MAX_DEPTH {
+    if state.moves.len() >= MAX_DEPTH {
         return Err("max depth".to_string());
     }
 
-    // TODO: need to remove back-and-forths
-    let last_move = if moves.is_empty() {
-        None
-    } else {
-        Some(moves[moves.len() - 1].clone())
-    };
-
-    let possibilitties = move_possibilities(state, last_move);
+    let possibilitties = state.move_possibilities();
     // println!("possible moves: {:?}", possibilitties);
 
-    let solutions: Vec<(HashMap<&str, GraphNode>, Vec<Move>)> = possibilitties
+    let solutions: Vec<State> = possibilitties
         .iter()
         .filter_map(|m| {
-            let result = move_data(state, m.clone());
+            let result = state.move_data(m.clone());
             if let Ok(new_state) = result {
-                let hash = state_hash(state);
+                let hash = state.hash();
                 if past_states.contains(&hash) {
                     return None;
                 }
-                let mut new_moves = moves.clone();
-                new_moves.push(m.clone());
+
                 let mut new_past_states = past_states.clone();
                 new_past_states.insert(hash);
-                solve(&new_state, new_moves, new_past_states).ok()
+                solve(&new_state, new_past_states).ok()
             } else {
                 None
             }
         })
         .collect();
 
-    // for (new_state, mv, new_hashes) in possibilitties.iter().filter_map(|m| {
-    //     if let Ok(new_state) = move_data(state, m.clone()) {
-    //         let hash = state_hash(state);
-    //         if past_states.contains(&hash) {
-    //             return None;
-    //         }
-    //         let mut new_past_states = past_states.clone();
-    //         new_past_states.insert(hash);
-    //         Some((new_state, m.clone(), new_past_states))
-    //     } else {
-    //         None
-    //     }
-    // }) {
-    //     let mut new_moves = moves.clone();
-    //     new_moves.push(mv);
-
-    //     if let Ok((solution, good_moves)) = solve(&new_state, new_moves, new_hashes) {
-    //         return Ok((solution, good_moves));
-    //     }
-    // }
-
     if solutions.is_empty() {
         Err("no solutions found :(")?
     }
 
     let mut min = usize::MAX;
-    let mut curr_solution: (HashMap<&str, GraphNode>, Vec<Move>) = (HashMap::new(), vec![]);
+    let mut curr_solution: &State = &State::default();
 
-    for (sol, moves) in solutions.iter() {
-        if moves.len() < min {
-            min = moves.len();
-            curr_solution = (sol.clone(), moves.clone());
+    for solution in solutions.iter() {
+        if solution.moves.len() < min {
+            min = solution.moves.len();
+            curr_solution = solution;
         }
     }
-    Ok(curr_solution)
+    Ok(curr_solution.clone())
 }
 
 fn main() {
@@ -262,12 +224,12 @@ fn main() {
     // print_state(&state);
     // println!("is solved: {}", is_solved(&state));
 
-    match solve(&state, vec![], HashSet::new()) {
+    match solve(&state, HashSet::new()) {
         // TODO: print moves & intermediate states?
-        Ok((solved_state, moves)) => {
-            println!("solved in {} moves!", moves.len());
-            print_state(&solved_state);
-            println!("Moves: {:?}", moves);
+        Ok(solved_state) => {
+            println!("solved in {} moves!", solved_state.moves.len());
+            solved_state.print();
+            println!("Moves: {:?}", solved_state.moves);
         }
         Err(e) => println!("failed! {:?}", e),
     }
