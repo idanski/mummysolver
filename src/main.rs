@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::{HashMap, HashSet, VecDeque};
 
 const LOC_1: &str = "1";
 const LOC_2: &str = "2";
@@ -7,7 +7,7 @@ const LOC_4: &str = "4";
 const LOC_5: &str = "5";
 const LOC_6: &str = "6";
 const LOC_M: &str = "M";
-const MAX_DEPTH: usize = 10;
+const MAX_DEPTH: usize = 64;
 
 #[derive(Clone, Debug)]
 struct GraphNode {
@@ -37,11 +37,16 @@ struct Move {
 struct State {
     map: HashMap<&'static str, GraphNode>,
     moves: Vec<Move>,
+    past_states: HashSet<String>,
 }
 
 impl State {
     fn is_solved(&self) -> bool {
         self.map.values().all(|node| node.is_placed())
+    }
+
+    fn is_max_depth(&self) -> bool {
+        self.moves.len() >= MAX_DEPTH
     }
 
     fn print(&self) {
@@ -53,7 +58,7 @@ impl State {
         println!("}}");
     }
 
-    fn move_possibilities(&self) -> Vec<Move> {
+    fn available_moves(&self) -> Vec<Move> {
         let empty = self.map.values().find(|v| v.data.is_none()).unwrap();
 
         empty
@@ -66,7 +71,7 @@ impl State {
             .collect()
     }
 
-    fn move_data(&self, m: Move) -> Result<State, &'static str> {
+    fn move_data(&self, m: &Move) -> Result<State, &'static str> {
         let mut new_state = self.clone();
 
         let from_node = new_state.map.get_mut(m.from.as_str()).unwrap(); // TODO: convert to err?
@@ -83,8 +88,14 @@ impl State {
         let to_node = new_state.map.get_mut(m.to.as_str()).unwrap(); // TODO: convert to err?
 
         to_node.data = Some(moveable);
-        new_state.moves.push(m);
+        new_state.moves.push(m.clone());
 
+        let state_hash = new_state.hash();
+        if new_state.past_states.contains(&state_hash) {
+            Err("circular, path, aborting")?
+        }
+
+        new_state.past_states.insert(state_hash);
         Ok(new_state)
     }
 
@@ -139,7 +150,7 @@ fn load_map(map: HashMap<&'static str, &'static str>) -> State {
         let up_neighbor = i / 6 + (i + 1) % 7;
         let mut down_neighbor = (i - 1) % 6;
         if down_neighbor == 0 {
-            // This could have been math but I'm too tired to figure it out
+            // This could have been math but I'm too tired to figure it out :(
             down_neighbor = 6;
         }
 
@@ -153,60 +164,31 @@ fn load_map(map: HashMap<&'static str, &'static str>) -> State {
     State {
         map: initial_state,
         moves: vec![],
+        past_states: HashSet::new(),
     }
 }
 
-fn solve(state: &State, past_states: HashSet<String>) -> Result<State, String> {
-    // println!("solve depth: {}, moves: {:?}", moves.len(), moves);
-    // print_state(state);
-    // println!("{:?}", past_states);
-    // println!("---------");
+fn solve_bfs(initial_state: State) -> Result<State, &'static str> {
+    let mut states_pool = VecDeque::from([initial_state]);
 
-    if state.is_solved() {
-        println!("found a solution in {} moves!", state.moves.len());
-        return Ok(state.clone());
-    }
-
-    if state.moves.len() >= MAX_DEPTH {
-        return Err("max depth".to_string());
-    }
-
-    let possibilitties = state.move_possibilities();
-    // println!("possible moves: {:?}", possibilitties);
-
-    let solutions: Vec<State> = possibilitties
-        .iter()
-        .filter_map(|m| {
-            let result = state.move_data(m.clone());
-            if let Ok(new_state) = result {
-                let hash = state.hash();
-                if past_states.contains(&hash) {
-                    return None;
-                }
-
-                let mut new_past_states = past_states.clone();
-                new_past_states.insert(hash);
-                solve(&new_state, new_past_states).ok()
-            } else {
-                None
-            }
-        })
-        .collect();
-
-    if solutions.is_empty() {
-        Err("no solutions found :(")?
-    }
-
-    let mut min = usize::MAX;
-    let mut curr_solution: &State = &State::default();
-
-    for solution in solutions.iter() {
-        if solution.moves.len() < min {
-            min = solution.moves.len();
-            curr_solution = solution;
+    while let Some(current_state) = states_pool.pop_front() {
+        if current_state.is_solved() {
+            return Ok(current_state);
         }
+
+        if current_state.is_max_depth() {
+            continue;
+        }
+
+        let new_states: Vec<State> = current_state
+            .available_moves()
+            .iter()
+            .filter_map(|m| current_state.move_data(m).ok())
+            .collect();
+        states_pool.extend(new_states.into_iter());
     }
-    Ok(curr_solution.clone())
+
+    Err("failed finding a solution")
 }
 
 fn main() {
@@ -221,11 +203,7 @@ fn main() {
 
     let state = load_map(starting_position);
 
-    // print_state(&state);
-    // println!("is solved: {}", is_solved(&state));
-
-    match solve(&state, HashSet::new()) {
-        // TODO: print moves & intermediate states?
+    match solve_bfs(state) {
         Ok(solved_state) => {
             println!("solved in {} moves!", solved_state.moves.len());
             solved_state.print();
