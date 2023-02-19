@@ -58,7 +58,7 @@ impl State {
         println!("{{");
         self.map
             .values()
-            .for_each(|node| println!("\t{:?}: {:?}", node.location, node.data));
+            .for_each(|node| println!("\t{}: {}", node.location, node.data.unwrap_or("-")));
         println!("}}");
     }
 
@@ -176,7 +176,7 @@ fn to_predefined_str(x: i32) -> Result<&'static str, ()> {
     }
 }
 
-fn solve_bfs(initial_state: State) -> Result<State, &'static str> {
+fn solve(initial_state: State) -> Result<State, &'static str> {
     let mut states_pool = VecDeque::from([initial_state]);
 
     while let Some(current_state) = states_pool.pop_front() {
@@ -211,7 +211,7 @@ fn main() {
 
     let state = load_map(starting_position);
 
-    match solve_bfs(state) {
+    match solve(state) {
         Ok(solved_state) => {
             println!("solved in {} moves!", solved_state.moves.len());
             solved_state.print();
