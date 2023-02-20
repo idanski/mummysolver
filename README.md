@@ -4,3 +4,7 @@ This is a simple Rust implementation of the mummy riddle in the [Horrified board
 
 Screenshot:
 ![](./screenshot.png)
+
+## TODO
+- [ ] Receive state as JSON
+- [ ] Compile to WASM and write a JS frontend
